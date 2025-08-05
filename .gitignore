@@ -1,0 +1,11 @@
+
+*.exe
+*.log
+vendor/
+
+**/~$*.sldprt
+**/~$*.sldasm
+**/~$*.slddrw
+**/~$*.SLDDRW
+**/~$*.SLDPRT
+**/~$*.SLDASM
