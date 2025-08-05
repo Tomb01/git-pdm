@@ -26,12 +26,17 @@ func LockFile(file string) (bool, Lock, error) {
 	//lockOutputBytes, err := lockCmd.Output()
 	lockOutputBytes, _ := lockCmd.CombinedOutput()
 	lockOutput := string(lockOutputBytes)
+	var lock Lock
+	//fmt.Println(lockOutput)
 	if strings.Contains(lockOutput, "Lock exists") {
 		lockData, _ := GetLock(file)
 		return false, lockData, nil
-	} else if strings.Contains(lockOutput, "Locked") {
-		lockData, _ := GetLock(file)
-		return true, lockData, nil
+	} else if strings.Contains(lockOutput, "locked_at") && !strings.Contains(lockOutput, "owner") {
+		if err := json.Unmarshal([]byte(lockOutputBytes), &lock); err != nil {
+			return false, Lock{}, fmt.Errorf("Error reading lfs output: %w", err)
+		} else {
+			return true, lock, nil
+		}
 	} else {
 		return false, Lock{}, fmt.Errorf(lockOutput)
 	}

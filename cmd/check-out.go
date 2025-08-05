@@ -8,20 +8,20 @@ import (
 )
 
 var checkoutCmd = &cobra.Command{
-	Use:   "check-out",
+	Use:   "edit",
 	Short: "Enable the edit of selected file",
-	Run:   checkOut,
+	Run:   edit,
 }
 
-func checkOut(cmd *cobra.Command, args []string) {
+func edit(cmd *cobra.Command, args []string) {
 	relPath := args[0] //relative path of the file
 	// Check if file is locked
 	lock, err := utils.GetLock(relPath)
 	if lock != (utils.Lock{}) {
-		fmt.Printf("File %s is already checked-out by %s\n", relPath, lock.Owner.Name)
+		fmt.Printf("File %s is already locked by %s\n", relPath, lock.Owner.Name)
 		return
 	} else if err != nil && lock != (utils.Lock{}) {
-		fmt.Println("Error in check-out:", err)
+		fmt.Println("Error in enabling edit:", err)
 		return
 	}
 
@@ -36,13 +36,13 @@ func checkOut(cmd *cobra.Command, args []string) {
 	// Lock file
 	status, lock, err := utils.LockFile(relPath)
 	if err != nil {
-		fmt.Println("Error in check-out:", err)
+		fmt.Println("Error in enabling edit:", err)
 		return
 	}
 	if status {
-		fmt.Printf("Successfully checked-out %s\n", relPath)
+		fmt.Printf("Successfully enabled editing for \"%s\"\n", relPath)
 	} else {
-		fmt.Printf("File %s is already checked-out by %s\n", relPath, lock.Owner.Name)
+		fmt.Printf("File %s is already locked by %s\n", relPath, lock.Owner.Name)
 		return
 	}
 }
