@@ -4,53 +4,67 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
-	"path/filepath"
+	"strings"
+	"time"
 )
 
 // Lock represents a single lock in the JSON output of `git lfs locks --json`
+type Owner struct {
+	Name string `json:"name"`
+}
+
 type Lock struct {
-	ID   string `json:"id"`
-	Path string `json:"path"`
+	ID       string    `json:"id"`
+	Path     string    `json:"path"`
+	Owner    Owner     `json:"owner"`
+	LockedAt time.Time `json:"locked_at"`
 }
 
-// LFSLocksOutput represents the structure of the JSON output
-type LFSLocksOutput struct {
-	Locks []Lock `json:"locks"`
-}
-
-func IsLocked(id string) (bool, string, error) {
-	repoRootCmd := exec.Command("git", "rev-parse", "--show-toplevel")
-}
-
-// GetLFSLockID returns the Git LFS lock ID for a given absolute file path
-func GetLFSLockID(absPath string) (string, error) {
-	if !filepath.IsAbs(absPath) {
-		return "", fmt.Errorf("path must be absolute: %s", absPath)
+func LockFile(file string) (bool, Lock, error) {
+	lockCmd := exec.Command("git", "lfs", "lock", file, "--json")
+	lockCmd.Dir = GetGitRoot()
+	//lockOutputBytes, err := lockCmd.Output()
+	lockOutputBytes, _ := lockCmd.CombinedOutput()
+	lockOutput := string(lockOutputBytes)
+	if strings.Contains(lockOutput, "Lock exists") {
+		lockData, _ := GetLock(file)
+		return false, lockData, nil
+	} else if strings.Contains(lockOutput, "Locked") {
+		lockData, _ := GetLock(file)
+		return true, lockData, nil
+	} else {
+		return false, Lock{}, fmt.Errorf(lockOutput)
 	}
+}
 
-	// Convert to relative path from git root
-	relPath, err := GitRelFilepath(absPath)
+// GetLock returns the Git LFS lock ID for a given absolute file path
+func GetLock(relPath string) (Lock, error) {
+
+	locks, err := GetLocks()
 	if err != nil {
-		return "", err
+		return Lock{}, fmt.Errorf("failed to run git lfs locks: %w", err)
+	}
+	for _, lock := range locks {
+		if lock.Path == relPath {
+			return lock, nil
+		}
 	}
 
+	return Lock{}, fmt.Errorf("no lock found for path: %s", relPath)
+}
+
+func GetLocks() ([]Lock, error) {
 	// Run `git lfs locks --json`
 	cmd := exec.Command("git", "lfs", "locks", "--json")
 	output, err := cmd.Output()
 	if err != nil {
-		return "", fmt.Errorf("failed to run git lfs locks: %w", err)
+		return nil, fmt.Errorf("failed to run git lfs locks: %w", err)
 	}
 
-	var locksOutput LFSLocksOutput
-	if err := json.Unmarshal(output, &locksOutput); err != nil {
-		return "", fmt.Errorf("failed to parse lfs locks output: %w", err)
+	var locks []Lock
+	if err := json.Unmarshal([]byte(output), &locks); err != nil {
+		return nil, fmt.Errorf("Error unmarshaling: %w", err)
 	}
 
-	for _, lock := range locksOutput.Locks {
-		if filepath.Clean(lock.Path) == relPath {
-			return lock.ID, nil
-		}
-	}
-
-	return "", fmt.Errorf("no lock found for path: %s", absPath)
+	return locks, nil
 }

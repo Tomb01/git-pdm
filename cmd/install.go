@@ -78,7 +78,7 @@ func install(cmd *cobra.Command, args []string) {
 		gitignore = ""
 	}
 
-	repoRoot := utils.GetGitPath()
+	repoRoot := utils.GetGitRoot()
 	if repoRoot != "" {
 		// append to gitigore
 		if gitignore != "" {

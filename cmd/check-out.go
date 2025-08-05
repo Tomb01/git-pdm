@@ -14,25 +14,37 @@ var checkoutCmd = &cobra.Command{
 }
 
 func checkOut(cmd *cobra.Command, args []string) {
-	target := args[0] //absolute path of the file
-	id, err := utils.GetLFSLockID(target)
-	if err != nil {
-		fmt.Println("Error in retriving file lock id")
+	relPath := args[0] //relative path of the file
+	// Check if file is locked
+	lock, err := utils.GetLock(relPath)
+	if lock != (utils.Lock{}) {
+		fmt.Printf("File %s is already checked-out by %s\n", relPath, lock.Owner.Name)
 		return
-	}
-	isLocked, locker, err := utils.IsLocked(id)
-	if err != nil {
-		fmt.Println("Error in retriving file lock status")
-		return
-	}
-	if isLocked {
-		//if is locked retrive error and print the locker
-		fmt.Println("The file is currently checked out by another user: ", locker)
+	} else if err != nil && lock != (utils.Lock{}) {
+		fmt.Println("Error in check-out:", err)
 		return
 	}
 
-	//check if file is not locked by another user
+	// File can be unlocked, check if file has changes on another branch
+	changes, err := utils.HasDiff(relPath)
+	if len(changes) > 0 {
+		// file has changes on another branch -> need update with checkout
+		fmt.Printf("The file was edited in another branch.\nUse the following command to retrive the last version\n\n\tgit checkout %s -- \"%s\"\n\n", changes[0], relPath)
+		return
+	}
 
+	// Lock file
+	status, lock, err := utils.LockFile(relPath)
+	if err != nil {
+		fmt.Println("Error in check-out:", err)
+		return
+	}
+	if status {
+		fmt.Printf("Successfully checked-out %s\n", relPath)
+	} else {
+		fmt.Printf("File %s is already checked-out by %s\n", relPath, lock.Owner.Name)
+		return
+	}
 }
 
 func init() {
