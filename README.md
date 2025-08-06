@@ -2,7 +2,7 @@
 
 **Repository is work in progress**
 
-* [Installation](./docs/INSTALL.mdS)
+* [Installation](./docs/INSTALL.md)
 
 
 
