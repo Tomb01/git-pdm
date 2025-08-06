@@ -1,0 +1,45 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+    xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+    <Package Name="Git PDM" Manufacturer="Tomb01" Version="1.0.0" Id="Tomb01.git_pdm" InstallerVersion="500" Compressed="yes">
+        <MajorUpgrade DowngradeErrorMessage="A later version of [ProductName] is already installed" AllowSameVersionUpgrades="yes" Schedule="afterInstallInitialize"/>
+
+        <!-- UI Resources -->
+        <!-- Primarily seems to serve to make the image references in builtin dialogs work -->
+        <ui:WixUI Id='WixUI_InstallDir_Custom' InstallDirectory='INSTALLFOLDER'/>
+
+        <Property Id="INSTALLFOLDER">
+            <RegistrySearch Id='gitpdmInstallDir' Type='directory' Root='HKLM' Key='Software\Tomb01\git-pdm' Name='InstallDir' />
+        </Property>
+
+        <!-- License -->
+        <WixVariable Id="WixUILicenseRtf" Value="$(env.ProjectDir)/installer/LICENSE.rtf" />
+
+        <Icon Id="AppIcon" SourceFile="$(env.ProjectDir)/icon.ico" />
+        <Property Id="ARPPRODUCTICON" Value="AppIcon" />
+
+        <!-- Installation Directory -->
+        <StandardDirectory Id="ProgramFilesFolder">
+            <Directory Id="INSTALLFOLDER" Name="git-pdm" />
+        </StandardDirectory>
+
+        <!-- Components and Features -->
+        <Component Id="MainExecutable" Directory="INSTALLFOLDER" Guid="135ed9cf-1cbf-4dbc-b2c6-b32ec8dd7021">
+            <File Source="$(env.ProjectDir)/build/git-pdm.exe"/>
+            <RegistryValue Root="HKLM" Key="Software\Tomb01\git-pdm" Name="InstallDir" Type="string" Value="[INSTALLFOLDER]" KeyPath="yes" />
+            <RemoveFile Id="PurgeAppFolder" Name="*.*" On="uninstall" />
+            <Environment Id="AddGitPdmToPath" Name="PATH" Value="[INSTALLFOLDER]" Permanent="no" Part="last" Action="set" System="yes" />
+        </Component>
+
+        <Component Id="UninstallShortcut" Guid="10d67ed1-01b5-4fcb-bc30-bc34d413cf71">
+            <Shortcut Id="UninstallShortcut" Directory="ProgramMenuFolder" Name="Uninstall git-pdm" Target="msiexec.exe" Arguments="/x [ProductCode]" />
+            <RemoveFolder Id="RemoveProgramMenuFolder" On="uninstall" />
+            <RegistryValue Root="HKLM" Key="Software\Tomb01\git-pdm" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+        </Component>
+
+        <Feature Id="MainFeature" Title="git-pdm">
+            <ComponentRef Id="MainExecutable" />
+            <ComponentRef Id="UninstallShortcut" />
+        </Feature>
+
+    </Package>
+</Wix>

@@ -1,0 +1,7 @@
+
+*.sldprt -text lockable
+*.sldasm -text lockable
+*.slddrw -text lockable
+*.SLDPRT -text lockable
+*.SLDASM -text lockable
+*.SLDDRW -text lockable
