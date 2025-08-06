@@ -2,6 +2,7 @@
 *.exe
 *.log
 vendor/
+build/
 
 **/~$*.sldprt
 **/~$*.sldasm
@@ -9,3 +10,5 @@ vendor/
 **/~$*.SLDDRW
 **/~$*.SLDPRT
 **/~$*.SLDASM
+# Added by goreleaser init:
+dist/

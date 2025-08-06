@@ -7,21 +7,21 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var checkoutCmd = &cobra.Command{
-	Use:   "edit",
-	Short: "Enable the edit of selected file",
-	Run:   edit,
+var lockCmd = &cobra.Command{
+	Use:   "lock",
+	Short: "Enable the edit of selected file by locking it",
+	Run:   lock,
 }
 
-func edit(cmd *cobra.Command, args []string) {
+func lock(cmd *cobra.Command, args []string) {
 	relPath := args[0] //relative path of the file
 	// Check if file is locked
-	lock, err := utils.GetLock(relPath)
+	lock, err := utils.GetLockStatus(relPath)
 	if lock != (utils.Lock{}) {
 		fmt.Printf("File %s is already locked by %s\n", relPath, lock.Owner.Name)
 		return
 	} else if err != nil && lock != (utils.Lock{}) {
-		fmt.Println("Error in enabling edit:", err)
+		fmt.Println("Error in locking:", err)
 		return
 	}
 
@@ -36,7 +36,7 @@ func edit(cmd *cobra.Command, args []string) {
 	// Lock file
 	status, lock, err := utils.LockFile(relPath)
 	if err != nil {
-		fmt.Println("Error in enabling edit:", err)
+		fmt.Println("Error in locking:", err)
 		return
 	}
 	if status {
@@ -48,6 +48,5 @@ func edit(cmd *cobra.Command, args []string) {
 }
 
 func init() {
-	//installCmd.Flags().StringVarP(&software, "software", "s", "", "Custom installation based on specific CAD software\nSOLIDWORS = Dassault System SOLIDWORKS")
-	rootCmd.AddCommand(checkoutCmd)
+	rootCmd.AddCommand(lockCmd)
 }

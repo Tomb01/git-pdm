@@ -1,12 +1,21 @@
 package utils
 
 import (
-	"bytes"
 	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strings"
 )
+
+func execGitCommand(args ...string) ([]byte, error) {
+	if args[0] == "git" {
+		args = args[1:]
+	}
+	cmd := exec.Command("git", args...)
+	cmd.Dir = GetGitRoot()
+	outBytes, err := cmd.Output()
+	return outBytes, err
+}
 
 func GetGitRoot() string {
 	// Get top-level repo dir (absolute)
@@ -24,8 +33,7 @@ func GetHooksPath() string {
 		return ""
 	}
 	// Get the relative hooks path
-	hooksPathCmd := exec.Command("git", "rev-parse", "--git-path", "hooks")
-	hooksRelBytes, err := hooksPathCmd.Output()
+	hooksRelBytes, err := execGitCommand("rev-parse", "--git-path", "hooks")
 	if err != nil {
 		return ""
 	}
@@ -39,14 +47,7 @@ func GetHooksPath() string {
 // GitRelFilepath gets the path relative to the git root
 func GitRelFilepath(absPath string) (string, error) {
 	// Get git root
-	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
-	gitRootBytes, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("Failed to get git root: %w", err)
-	}
-	gitRoot := string(gitRootBytes)
-	gitRoot = filepath.Clean(string(gitRoot))
-
+	gitRoot := GetGitRoot()
 	// Compute relative path
 	relPath, err := filepath.Rel(gitRoot, absPath)
 	if err != nil {
@@ -60,9 +61,7 @@ func GitRelFilepath(absPath string) (string, error) {
 func HasBranchDiff(relPath, remoteBranch string) (bool, error) {
 
 	// Step 1: Check if the file exists in the remote branch
-	checkCmd := exec.Command("git", "ls-tree", "-r", remoteBranch, "--", relPath)
-	checkCmd.Dir = GetGitRoot()
-	output, err := checkCmd.Output()
+	output, err := execGitCommand("ls-tree", "-r", remoteBranch, "--", relPath)
 	if err != nil {
 		return false, fmt.Errorf("failed to check if file exists in remote branch: %w", err)
 	}
@@ -73,24 +72,18 @@ func HasBranchDiff(relPath, remoteBranch string) (bool, error) {
 	}
 
 	// Step 2: Compare file in current HEAD vs remote
-	diffCmd := exec.Command("git", "diff", fmt.Sprintf(remoteBranch), "--", relPath)
-	diffCmd.Dir = GetGitRoot()
-	var out bytes.Buffer
-	diffCmd.Stdout = &out
-	diffCmd.Stderr = &out
-
-	if err := diffCmd.Run(); err != nil {
-		return false, fmt.Errorf("git diff failed: %w\n%s", err, out.String())
+	output, err = execGitCommand("git", "diff", fmt.Sprintf(remoteBranch), "--", relPath)
+	if err != nil {
+		return false, fmt.Errorf("git diff failed: %w\n%s", err, string(output))
 	}
 
 	// If output is not empty, file has changed
-	changed := out.Len() > 0
+	changed := len(output) > 0
 	return changed, nil
 }
 
 func GetCurrentBranch() (string, error) {
-	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
-	out, err := cmd.Output()
+	out, err := execGitCommand("git", "rev-parse", "--abbrev-ref", "HEAD")
 	if err != nil {
 		return "", fmt.Errorf("failed to get current branch: %w", err)
 	}
@@ -110,8 +103,7 @@ func HasDiff(filePath string) ([]string, error) {
 	}
 
 	// Fetch latest remote data
-	fetchCmd := exec.Command("git", "fetch", "origin")
-	if output, err := fetchCmd.CombinedOutput(); err != nil {
+	if output, err := execGitCommand("git", "fetch", "origin"); err != nil {
 		return nil, fmt.Errorf("git fetch failed: %w\n%s", err, output)
 	}
 
@@ -137,8 +129,7 @@ func HasDiff(filePath string) ([]string, error) {
 
 // GetRemoteBranches returns all remote branches (e.g., origin/main, origin/dev)
 func GetRemoteBranches() ([]string, error) {
-	cmd := exec.Command("git", "branch", "-r")
-	out, err := cmd.Output()
+	out, err := execGitCommand("git", "branch", "-r")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list remote branches: %w", err)
 	}
@@ -151,4 +142,27 @@ func GetRemoteBranches() ([]string, error) {
 		}
 	}
 	return branches, nil
+}
+
+// GetGitUserName returns the configured Git user.name
+func GetGitUserName() (string, error) {
+	out, err := execGitCommand("git", "config", "user.name")
+	if err != nil {
+		return "", fmt.Errorf("failed to get git user.name: %w\n%s", err, string(out))
+	}
+	return string(out), nil
+}
+
+func GetAbsoluteFilePath(gitRelPath string) (string, error) {
+	// Get the top-level directory of the git repo
+	output, err := execGitCommand("git", "rev-parse", "--show-toplevel")
+	if err != nil {
+		return "", fmt.Errorf("failed to get git root: %w", err)
+	}
+
+	root := strings.TrimSpace(string(output))
+
+	// Join the root and relative path
+	absPath := filepath.Join(root, gitRelPath)
+	return absPath, nil
 }

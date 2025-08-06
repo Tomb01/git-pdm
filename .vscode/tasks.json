@@ -4,8 +4,24 @@
     {
       "label": "Build CLI",
       "type": "shell",
-      "command": "go build -o git-lfs-pdm",
+      "command": "go build -o ./build/git-pdm.exe ",
       "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Create MSI Installer",
+      "type": "shell",
+      "command": "go-msi",
+      "args": [
+        "make",
+        "--config",
+        "installer.json",
+        "--output",
+        "./build/git-pdm-installer.msi"
+      ],
+      "dependsOn": [
+        "Build CLI"
+      ],
       "problemMatcher": []
     }
   ]

@@ -1,0 +1,30 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+    xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+    <Package Name="Git PDM" Manufacturer="Tomb01" Version="1.0.0.1001" UpgradeCode="d9fbaac3-96f5-4d97-80a9-cf3b3a6e7f1f" InstallerVersion="500" Compressed="yes">
+        <MajorUpgrade DowngradeErrorMessage="A newer version of the application is already installed" />
+
+        <!-- UI Resources -->
+        <!-- Primarily seems to serve to make the image references in builtin dialogs work -->
+        <ui:WixUI Id='WixUI_InstallDir_Custom' InstallDirectory='INSTALLFOLDER'/>
+
+        <!-- License -->
+        <WixVariable Id="WixUILicenseRtf" Value="$(env.ProjectDir)/installer/LICENSE.rtf" />
+
+        <!-- Installation Directory -->
+        <StandardDirectory Id="ProgramFilesFolder">
+            <Directory Id="INSTALLFOLDER" Name="git-pdm" />
+        </StandardDirectory>
+
+        <!-- Components and Features -->
+        <Component Id="MainExecutable" Directory="INSTALLFOLDER" Guid="135ed9cf-1cbf-4dbc-b2c6-b32ec8dd7021">
+            <File Source="$(env.ProjectDir)/build/git-pdm.exe"/>
+            <Environment Id="AddGitPdmToPath" Name="PATH" Value="[INSTALLFOLDER]" Permanent="no" Part="last" Action="set" System="yes" />
+            <RegistryValue Root="HKLM" Key="Software\Tomb01\git-pdm" Name="Installed" Type="integer" Value="1" KeyPath="yes" />
+        </Component>
+
+        <Feature Id="MainFeature" Title="git-pdm">
+            <ComponentRef Id="MainExecutable" />
+        </Feature>
+
+    </Package>
+</Wix>
