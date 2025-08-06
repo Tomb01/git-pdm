@@ -26,7 +26,7 @@ func lock(cmd *cobra.Command, args []string) {
 	}
 
 	// File can be unlocked, check if file has changes on another branch
-	changes, err := utils.HasDiff(relPath)
+	changes, _ := utils.HasDiff(relPath)
 	if len(changes) > 0 {
 		// file has changes on another branch -> need update with checkout
 		fmt.Printf("The file was edited in another branch.\nUse the following command to retrive the last version\n\n\tgit checkout %s -- \"%s\"\n\n", changes[0], relPath)
