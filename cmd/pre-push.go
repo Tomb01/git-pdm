@@ -13,8 +13,6 @@ var prePushCmd = &cobra.Command{
 	Run:   prePush,
 }
 
-var verbose bool
-
 func prePush(cmd *cobra.Command, args []string) {
 	// Pre push command
 	// Unlock all files
@@ -32,14 +30,25 @@ func prePush(cmd *cobra.Command, args []string) {
 		fmt.Println("No file to unlock")
 		return
 	}
-	count := len(locks)
-	for i, lock := range locks {
-		status, _, err := utils.UnLockFile(lock.Path)
-		if err != nil || !status {
-			fmt.Println("Error in unlocking "+lock.Path, err)
-			return
-		} else if verbose {
-			fmt.Printf("Successfully unlocked %s (%d/%d)\n", lock.Path, i+1, count)
+	userName, err := utils.GetGitUserName()
+	if err != nil {
+		fmt.Println("Fail to retrive Git username", err)
+		return
+	}
+	for _, lock := range locks {
+		if lock.Owner.Name == userName {
+			absPath, _ := utils.GetAbsoluteFilePath(lock.Path)
+			if !utils.FileExists(absPath) && err != nil {
+				fmt.Printf("%s doesn't exist anymore. Skipping lock\n", lock.Path)
+			} else {
+				status, _, err := utils.UnLockFile(lock.Path)
+				if err != nil || !status {
+					fmt.Println("Error in unlocking "+lock.Path, err)
+					return
+				} else if verbose {
+					fmt.Printf("Successfully unlocked %s\n", lock.Path)
+				}
+			}
 		}
 	}
 
@@ -47,6 +56,5 @@ func prePush(cmd *cobra.Command, args []string) {
 }
 
 func init() {
-	prePushCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Print complete output")
 	rootCmd.AddCommand(prePushCmd)
 }

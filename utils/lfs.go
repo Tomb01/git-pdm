@@ -1,8 +1,10 @@
 package utils
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -108,4 +110,57 @@ func GetLocks(args ...string) ([]Lock, error) {
 	}
 
 	return locks, nil
+}
+
+func GetLockableFiles() ([]string, error) {
+	path := GetGitRoot() + "/.gitattributes"
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	lockableExtensions := make(map[string]struct{}) // Use map to avoid duplicates
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+
+		// Skip empty lines or comments
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+
+		pattern := fields[0]
+		attributes := fields[1:]
+
+		// Check if "lockable" is present in attributes
+		for _, attr := range attributes {
+			if attr == "lockable" {
+				// Extract the extension from the pattern
+				if strings.HasPrefix(pattern, "*.") {
+					//ext := pattern[2:] // remove "*."
+					lockableExtensions[strings.ToUpper(pattern)] = struct{}{}
+				}
+				break
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	// Convert map keys to a slice
+	result := make([]string, 0, len(lockableExtensions))
+	for ext := range lockableExtensions {
+		result = append(result, ext)
+	}
+
+	return result, nil
 }

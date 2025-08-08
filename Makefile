@@ -9,6 +9,7 @@ ICON_SRC := $(PROJECTDIR_WIN)\icon.svg
 ICON_DIR := $(PROJECTDIR_WIN)\ignore
 
 .PHONY: dist
+.PHONY: build
 
 dist:
 	go build -o .\build\git-pdm.exe
@@ -20,6 +21,9 @@ icon:
 		inkscape -o $(ICON_DIR)\icon_$${size}.png -w $$size -h $$size $(ICON_SRC); \
 	done
 	magick $(foreach size,$(ICON_SIZES),$(ICON_DIR)\icon_$(size).png) $(PROJECTDIR_WIN)\icon.ico
+
+build:
+	go build -o .\build\git-pdm.exe
 
 clean:
 	rm -f $(MSI)

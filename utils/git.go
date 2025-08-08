@@ -1,6 +1,9 @@
 package utils
 
 import (
+	"bufio"
+	"bytes"
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -8,13 +11,35 @@ import (
 )
 
 func execGitCommand(args ...string) ([]byte, error) {
+	if len(args) == 0 {
+		return nil, errors.New("no arguments provided to execGitCommand")
+	}
+
+	// Strip the leading "git" if included
 	if args[0] == "git" {
 		args = args[1:]
 	}
+
 	cmd := exec.Command("git", args...)
 	cmd.Dir = GetGitRoot()
-	outBytes, err := cmd.Output()
-	return outBytes, err
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	//fmt.Println(strings.Join(args, " "))
+	//fmt.Println("Executing:", "git", strings.Join(args, " "))
+	// If there is an error, but stderr is empty and stdout is empty (like `git diff`), return no error
+	if err != nil {
+		if stderr.Len() > 0 {
+			// Real error (e.g., invalid command)
+			return nil, errors.New(stderr.String())
+		}
+		// Command failed but no actual stderr — treat as non-critical
+		return stdout.Bytes(), nil
+	}
+	return stdout.Bytes(), nil
 }
 
 func GetGitRoot() string {
@@ -72,7 +97,7 @@ func HasBranchDiff(relPath, remoteBranch string) (bool, error) {
 	}
 
 	// Step 2: Compare file in current HEAD vs remote
-	output, err = execGitCommand("git", "diff", fmt.Sprintf(remoteBranch), "--", relPath)
+	output, err = execGitCommand("git", "diff", remoteBranch, "--", relPath)
 	if err != nil {
 		return false, fmt.Errorf("git diff failed: %w\n%s", err, string(output))
 	}
@@ -165,4 +190,38 @@ func GetAbsoluteFilePath(gitRelPath string) (string, error) {
 	// Join the root and relative path
 	absPath := filepath.Join(root, gitRelPath)
 	return absPath, nil
+}
+
+type DiffEntry struct {
+	Status   string // e.g., M = modified, A = added, D = deleted
+	Filename string
+}
+
+func GetDiff(branch string, file []string) ([]DiffEntry, error) {
+	args := append([]string{"diff", branch, "--name-status", "--"}, file...)
+	fileBytes, err := execGitCommand(args...)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to run git diff comand: %w", err)
+	}
+	var entries []DiffEntry
+	scanner := bufio.NewScanner(bytes.NewReader(fileBytes))
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		parts := strings.Split(line, "\t")
+
+		if len(parts) >= 2 {
+			entry := DiffEntry{
+				Status:   parts[0],
+				Filename: parts[1],
+			}
+			entries = append(entries, entry)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("Error in reading git diff output: %w", err)
+	}
+
+	return entries, nil
 }

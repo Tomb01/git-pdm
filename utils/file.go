@@ -23,3 +23,8 @@ func SetReadOnly(filePath string) error {
 	}
 	return nil
 }
+
+func FileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil || !os.IsNotExist(err)
+}

@@ -22,6 +22,8 @@
             <Directory Id="INSTALLFOLDER" Name="git-pdm" />
         </StandardDirectory>
 
+        <MediaTemplate EmbedCab="yes" />
+
         <!-- Components and Features -->
         <Component Id="MainExecutable" Directory="INSTALLFOLDER" Guid="135ed9cf-1cbf-4dbc-b2c6-b32ec8dd7021">
             <File Source="$(env.ProjectDir)/build/git-pdm.exe"/>
