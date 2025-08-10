@@ -26,6 +26,12 @@ type UnLock struct {
 	Unlocked bool `json:"unlocked"`
 }
 
+// Root struct for the full JSON
+type LockVerify struct {
+	Ours   []Lock `json:"ours"`
+	Theirs []Lock `json:"theirs"`
+}
+
 func LockFile(file string) (bool, Lock, error) {
 	lockCmd := exec.Command("git", "lfs", "lock", file, "--json")
 	lockCmd.Dir = GetGitRoot()
@@ -83,7 +89,7 @@ func UnLockFile(file string) (bool, Lock, error) {
 // GetLockStatus returns the Git LFS lock ID for a given absolute file path
 func GetLockStatus(relPath string) (Lock, error) {
 
-	locks, err := GetLocks()
+	locks, err := GetOursLocks()
 	if err != nil {
 		return Lock{}, fmt.Errorf("failed to run git lfs locks: %w", err)
 	}
@@ -96,20 +102,19 @@ func GetLockStatus(relPath string) (Lock, error) {
 	return Lock{}, fmt.Errorf("no lock found for path: %s", relPath)
 }
 
-func GetLocks(args ...string) ([]Lock, error) {
+func GetOursLocks() ([]Lock, error) {
 	// Run `git lfs locks --json`
-	args = append([]string{"git", "lfs", "locks", "--json"}, args...)
-	output, err := execGitCommand(args...)
+	output, err := execGitCommand("git", "lfs", "locks", "--verify", "--json")
 	if err != nil {
 		return nil, fmt.Errorf("failed to run git lfs locks: %w", err)
 	}
 
-	var locks []Lock
+	var locks LockVerify
 	if err := json.Unmarshal([]byte(output), &locks); err != nil {
 		return nil, fmt.Errorf("Error unmarshaling: %w", err)
 	}
 
-	return locks, nil
+	return locks.Ours, nil
 }
 
 func GetLockableFiles() ([]string, error) {

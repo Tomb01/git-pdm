@@ -1,12 +1,9 @@
 package cmd
 
 import (
-	"fmt"
-
+	"github.com/Tomb01/git-pdm/utils"
 	"github.com/spf13/cobra"
 )
-
-var verbose bool
 
 var rootCmd = &cobra.Command{
 	Use:   "git-pdm",
@@ -14,15 +11,9 @@ var rootCmd = &cobra.Command{
 	Long:  "git-pdm helps manage and automate project dependencies, templates, and tasks in Git repositories.",
 }
 
-func Log(str string) {
-	if verbose {
-		fmt.Print(str)
-	}
-}
-
 func init() {
 	// Global persistent flag, available to all subcommands
-	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable verbose output")
+	rootCmd.PersistentFlags().BoolVarP(&utils.Verbose, "verbose", "v", false, "enable verbose output")
 }
 
 func Execute() {

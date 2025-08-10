@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"path"
 
 	"github.com/Tomb01/git-pdm/utils"
 	"github.com/spf13/cobra"
@@ -16,16 +15,6 @@ var diffCmd = &cobra.Command{
 	Use:   "diff",
 	Short: "Check the difference between current branch and other repository branch. This command must be used to check the ability to lock a file for edit in the current branch",
 	Run:   diff,
-}
-
-type PdmFileDiff struct {
-	Path     string                `json:"path"`
-	Branches []PdmDiffBranchStatus `json:"branches"`
-}
-
-type PdmDiffBranchStatus struct {
-	Name   string `json:"name"`
-	Status string `json:"status"`
 }
 
 func diff(cmd *cobra.Command, args []string) {
@@ -42,76 +31,31 @@ func diff(cmd *cobra.Command, args []string) {
 		search = filePatterns
 	}
 
-	pdmDiffEntries := make(map[string]PdmFileDiff)
-	branches, err := utils.GetRemoteBranches()
-	currentBranch, err2 := utils.GetCurrentBranch()
-	root := utils.GetGitRoot()
-	if err != nil || err2 != nil {
-		fmt.Println("Error in retiving remote branches", err)
+	diffEntries, err := utils.Diff(search, false)
+	if err != nil {
+		fmt.Println("Error in diff research", err)
 		return
 	}
+	utils.LogVerbose("\n")
 
 	if onlyConflict {
-		currentDiff, err := utils.GetDiff("main..."+currentBranch, search)
-		Log("Comparing current branch with main...")
-		if err != nil {
-			fmt.Println("Error in comparing "+currentBranch, err)
-			return
-		}
-		for _, diff := range currentDiff {
-			pdmDiffEntries[diff.Filename] = PdmFileDiff{Path: path.Join(root, diff.Filename)}
-		}
-		Log("Complete\n")
-	}
-	var compare string
-	for _, branch := range branches {
-		if branch == "origin/"+currentBranch {
-			continue
-		}
-		if !onlyConflict {
-			compare = branch + "..." + currentBranch
-		} else {
-			compare = branch + "...origin/main"
-		}
-		Log(fmt.Sprintf("Comparing %s . . . ", compare))
-		diffEntries, err := utils.GetDiff(compare, search)
-		if err != nil {
-			fmt.Println("Error in comparing "+branch, err)
-			return
-		}
-		for _, diff := range diffEntries {
-			pdmDiff := pdmDiffEntries[diff.Filename]
-			if pdmDiff.Path == "" && !onlyConflict {
-				// create new diff
-				pdmDiff = PdmFileDiff{
-					Path: path.Join(root, diff.Filename),
-					Branches: []PdmDiffBranchStatus{
-						{Name: branch, Status: diff.Status},
-					}}
-			} else {
-				// append branch
-				if !onlyConflict || diff.Status != "A" {
-					pdmDiff.Branches = append(pdmDiff.Branches, PdmDiffBranchStatus{Name: branch, Status: diff.Status})
+		for key, entry := range diffEntries {
+			for i := len(entry.Branches) - 1; i >= 0; i-- {
+				if entry.Branches[i].Status != "M" {
+					// swap with last and shrink
+					entry.Branches[i] = entry.Branches[len(entry.Branches)-1]
+					entry.Branches = entry.Branches[:len(entry.Branches)-1]
 				}
 			}
-			pdmDiffEntries[diff.Filename] = pdmDiff
-		}
-		Log("Complete\n")
-	}
-
-	//retrive output
-	// if --conflict is activated print only the files that have two or more entries in branches property
-	if onlyConflict {
-		for k, diff := range pdmDiffEntries {
-			if len(diff.Branches) <= 1 {
-				delete(pdmDiffEntries, k)
+			diffEntries[key] = entry
+			if len(entry.Branches) <= 1 {
+				delete(diffEntries, key)
 			}
 		}
 	}
-	Log("\n")
 
 	if outJson {
-		out, err := utils.ToJson(pdmDiffEntries)
+		out, err := utils.ToJson(diffEntries)
 		if err != nil {
 			fmt.Println("Error in JSON conversion", err)
 		} else {
@@ -119,7 +63,7 @@ func diff(cmd *cobra.Command, args []string) {
 			return
 		}
 	} else {
-		for k, diff := range pdmDiffEntries {
+		for k, diff := range diffEntries {
 			fmt.Printf("%s has changes in current and %d other branches\n", k, len(diff.Branches))
 		}
 		fmt.Print("\nTo show more information use the --json option")
@@ -130,6 +74,6 @@ func diff(cmd *cobra.Command, args []string) {
 func init() {
 	diffCmd.Flags().StringSliceVarP(&filePatterns, "filepath", "f", []string{}, "Check the difference of a specific file or file type (use * as a wildcard). If empty checks all the locked file types specified in .gitattributes.")
 	diffCmd.Flags().BoolVar(&outJson, "json", false, "If used, the output will be formatted in JSON")
-	diffCmd.Flags().BoolVarP(&onlyConflict, "conflict", "c", false, "Prints only the files that were modified in current and in at least another different branch, those files can lead to conflict during merging and unlocking")
+	diffCmd.Flags().BoolVarP(&onlyConflict, "only-conflict", "c", false, "Only edit conflict will be printed")
 	rootCmd.AddCommand(diffCmd)
 }

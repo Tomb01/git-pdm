@@ -115,43 +115,6 @@ func GetCurrentBranch() (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-func HasDiff(filePath string) ([]string, error) {
-	branches, err := GetRemoteBranches()
-	if err != nil {
-		return nil, err
-	}
-
-	// Get the current branch name (e.g., "main")
-	currentBranch, err := GetCurrentBranch()
-	if err != nil {
-		return nil, err
-	}
-
-	// Fetch latest remote data
-	if output, err := execGitCommand("git", "fetch", "origin"); err != nil {
-		return nil, fmt.Errorf("git fetch failed: %w\n%s", err, output)
-	}
-
-	var changedBranches []string
-	for _, branch := range branches {
-		// Skip origin/<currentBranch>
-		if branch == "origin/"+currentBranch {
-			continue
-		}
-
-		changed, err := HasBranchDiff(filePath, branch)
-		if err != nil {
-			fmt.Printf("Warning: skipping branch %s due to error: %v\n", branch, err)
-			continue
-		}
-		if changed {
-			changedBranches = append(changedBranches, branch)
-		}
-	}
-
-	return changedBranches, nil
-}
-
 // GetRemoteBranches returns all remote branches (e.g., origin/main, origin/dev)
 func GetRemoteBranches() ([]string, error) {
 	out, err := execGitCommand("git", "branch", "-r")
@@ -197,8 +160,8 @@ type DiffEntry struct {
 	Filename string
 }
 
-func GetDiff(branch string, file []string) ([]DiffEntry, error) {
-	args := append([]string{"diff", branch, "--name-status", "--"}, file...)
+func GetDiff(commit1 string, commit2 string, file []string) ([]DiffEntry, error) {
+	args := append([]string{"diff", commit1, commit2, "--name-status", "--"}, file...)
 	fileBytes, err := execGitCommand(args...)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to run git diff comand: %w", err)
@@ -224,4 +187,12 @@ func GetDiff(branch string, file []string) ([]DiffEntry, error) {
 	}
 
 	return entries, nil
+}
+
+func GetCommonAncestor(baseBranch string, sourceBranch string) (string, error) {
+	out, err := execGitCommand("merge-base", baseBranch, sourceBranch)
+	if err != nil {
+		return "", fmt.Errorf("Error in merge-base: %w", err)
+	}
+	return strings.ReplaceAll(string(out), "\n", ""), nil
 }

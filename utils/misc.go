@@ -2,8 +2,11 @@ package utils
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 )
+
+var Verbose bool
 
 func JoinWithQuotes(parts []string, sep string) string {
 	for i, v := range parts {
@@ -18,4 +21,10 @@ func ToJson(data interface{}) (string, error) {
 		return "", err
 	}
 	return string(jsonBytes), nil
+}
+
+func LogVerbose(str string) {
+	if Verbose {
+		fmt.Print(str)
+	}
 }
