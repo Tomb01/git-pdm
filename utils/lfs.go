@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 )
@@ -33,13 +32,12 @@ type LockVerify struct {
 }
 
 func LockFile(file string) (bool, Lock, error) {
-	lockCmd := exec.Command("git", "lfs", "lock", file, "--json")
-	lockCmd.Dir = GetGitRoot()
-	//lockOutputBytes, err := lockCmd.Output()
-	lockOutputBytes, _ := lockCmd.CombinedOutput()
+	lockOutputBytes, err := execGitCommand("git", "lfs", "lock", file, "--json")
+	if err != nil {
+		return false, Lock{}, err
+	}
 	lockOutput := string(lockOutputBytes)
 	var lock Lock
-	//fmt.Println(lockOutput)
 	if strings.Contains(lockOutput, "Lock exists") {
 		lockData, _ := GetLockStatus(file)
 		return false, lockData, nil
@@ -50,46 +48,54 @@ func LockFile(file string) (bool, Lock, error) {
 			return true, lock, nil
 		}
 	} else {
-		return false, Lock{}, fmt.Errorf(lockOutput)
+		return false, Lock{}, fmt.Errorf("General error in locking operations")
 	}
 }
 
-func UnLockFile(file string) (bool, Lock, error) {
-	unlockCmd := exec.Command("git", "lfs", "unlock", file, "--json")
-	unlockCmd.Dir = GetGitRoot()
-	absPath, _ := GetAbsoluteFilePath(file)
-	//unlockOutputBytes, err := lockCmd.Output()
-	unlockOutputBytes, _ := unlockCmd.CombinedOutput()
+func UnLockFile(relPath string) (bool, Lock, error) {
+	// get lock status
+	lockStatus, err := GetLockStatus(relPath)
+	if err != nil {
+		return false, lockStatus, err
+	}
+
+	absPath, err := GetAbsoluteFilePath(relPath)
+	if err != nil {
+		return false, Lock{}, fmt.Errorf("Unable to retrive complete file path")
+	}
+	// set read only before unlocking
+	err = SetReadOnly(absPath)
+	if err != nil {
+		return false, Lock{}, fmt.Errorf("Error in file unlocking")
+	}
+	unlockOutputBytes, err := execGitCommand("git", "lfs", "unlock", relPath, "--json")
+	if err != nil {
+		return false, Lock{}, err
+	}
 	unlockOutput := string(unlockOutputBytes)
 	var unlock UnLock
-	//fmt.Println(lockOutput)
 	if strings.Contains(unlockOutput, "Lock exists") {
 		// Locked by another user
-		lockData, _ := GetLockStatus(file)
+		lockData, _ := GetLockStatus(relPath)
 		return false, lockData, nil
 	} else if strings.Contains(unlockOutput, "unlocked") {
 		// Unlocked procedure completed
 		if err := json.Unmarshal([]byte(unlockOutputBytes), &unlock); err != nil {
 			return false, Lock{}, fmt.Errorf("Error reading lfs output: %w", err)
 		} else {
-			if unlock.Unlocked {
-				SetReadOnly(absPath)
-			}
 			return unlock.Unlocked, Lock{}, nil
 		}
 	} else if strings.Contains(unlockOutput, "no matching locks found") {
-		// No lock exist
-		SetReadOnly(absPath)
 		return true, Lock{}, nil
 	} else {
-		return false, Lock{}, fmt.Errorf(unlockOutput)
+		return false, Lock{}, fmt.Errorf("General error in unlocking operations")
 	}
 }
 
 // GetLockStatus returns the Git LFS lock ID for a given absolute file path
 func GetLockStatus(relPath string) (Lock, error) {
 
-	locks, err := GetOursLocks()
+	locks, err := GetLocks(false)
 	if err != nil {
 		return Lock{}, fmt.Errorf("failed to run git lfs locks: %w", err)
 	}
@@ -102,9 +108,9 @@ func GetLockStatus(relPath string) (Lock, error) {
 	return Lock{}, fmt.Errorf("no lock found for path: %s", relPath)
 }
 
-func GetOursLocks() ([]Lock, error) {
+func GetLocks(onlyUser bool) ([]Lock, error) {
 	// Run `git lfs locks --json`
-	output, err := execGitCommand("git", "lfs", "locks", "--verify", "--json")
+	output, err := execGitCommand("git", "lfs", "locks", "--json", "--verify")
 	if err != nil {
 		return nil, fmt.Errorf("failed to run git lfs locks: %w", err)
 	}
@@ -113,8 +119,12 @@ func GetOursLocks() ([]Lock, error) {
 	if err := json.Unmarshal([]byte(output), &locks); err != nil {
 		return nil, fmt.Errorf("Error unmarshaling: %w", err)
 	}
+	if onlyUser {
+		return locks.Ours, nil
+	} else {
+		return append(locks.Ours, locks.Theirs...), nil
+	}
 
-	return locks.Ours, nil
 }
 
 func GetLockableFiles() ([]string, error) {

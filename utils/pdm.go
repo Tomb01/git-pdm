@@ -2,7 +2,6 @@ package utils
 
 import (
 	"fmt"
-	"path"
 )
 
 type PdmFileDiff struct {
@@ -10,12 +9,20 @@ type PdmFileDiff struct {
 	Branches []PdmDiffBranchStatus `json:"branches"`
 }
 
+/*
+	Status
+
+- 0 -> same file, no changes
+- 1 -> previous file version, need reload
+- 2 -> no match between branch, new file
+*/
 type PdmDiffBranchStatus struct {
 	Name   string `json:"name"`
-	Status string `json:"status"`
+	Status int    `json:"status"`
+	Commit string `json:"commit"`
 }
 
-func Diff(relPath []string, fast bool) (map[string]PdmFileDiff, error) {
+func FileDiff(relPath string, fast bool) ([]PdmDiffBranchStatus, error) {
 	currentBranch, err := GetCurrentBranch()
 	if err != nil {
 		return nil, err
@@ -26,70 +33,67 @@ func Diff(relPath []string, fast bool) (map[string]PdmFileDiff, error) {
 		return nil, err
 	}
 
-	root := GetGitRoot()
+	//root := GetGitRoot()
+	current_hash, err := GetFileHash(relPath, "HEAD")
+	if err != nil {
+		return nil, fmt.Errorf("Error in retriving the file current hash", err)
+	}
+	file := []string{relPath}
+	//fmt.Println(current_hash)
 
 	// Fetch latest remote data
 	if output, err := execGitCommand("git", "fetch", "origin"); err != nil {
 		return nil, fmt.Errorf("git fetch failed: %w\n%s", err, output)
 	}
 
-	changedEntries := make(map[string]PdmFileDiff)
+	changedEntries := []PdmDiffBranchStatus{}
 	for _, branch := range branches {
 		// Skip origin/<currentBranch>
 		if branch == "origin/"+currentBranch {
 			continue
 		}
-		LogVerbose(fmt.Sprintf("Comparing changes in %s\n", branch))
-		// get the commit in which the branch was separated from main
-		commonAncestor, err := GetCommonAncestor(branch, "main")
+		LogVerbose(fmt.Sprintf("Comparing hash in %s\n", branch))
+		// get the common ancestor between the two branches
+		commonAncestor, err := GetCommonAncestor(branch, currentBranch)
 		if err != nil {
 			return nil, err
 		}
-		// get changes from common ancestor to main and the branch HEAD -> if true the changes was edited in this branch
-		changes, err := GetDiff(commonAncestor, branch, relPath)
+		// get list of commit hash from common ancestor to current branch commit
+		history, err := GetCommitHystory(commonAncestor, branch, file)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Error in retriving commit history", err)
 		}
-		if len(changes) > 0 {
-			// check if the file different from the current
-			if fast {
-				LogVerbose(fmt.Sprintf("The file was edited in %s\nCheck if it differs from the current head . . . ", branch))
-			}
-
-			changes, err := GetDiff("HEAD", branch, relPath)
+		history = append([]string{commonAncestor}, history...)
+		common_hash := false
+		for i, commit := range history {
+			prev_hash, err := GetFileHash(relPath, commit)
+			//LogVerbose(prev_hash)
 			if err != nil {
-				return nil, err
+				return changedEntries, fmt.Errorf("Error in retriving the file hash in commit "+commit, err)
 			}
-			if len(changes) > 0 {
-				// the file was edited in the target branch
-				if fast {
-					LogVerbose(fmt.Sprintf("The file was edited both in %s and current branch\n", branch))
-				}
-				if fast {
-					LogVerbose("Fast mode ON. Only the first changes will be returned\n")
-					changedEntries[relPath[0]] = PdmFileDiff{Path: relPath[0], Branches: []PdmDiffBranchStatus{{Name: branch, Status: "M"}}}
-					return changedEntries, nil
-				} else {
-					for _, diff := range changes {
-						pdmDiff := changedEntries[diff.Filename]
-						if pdmDiff.Path == "" {
-							// create new diff
-							pdmDiff = PdmFileDiff{
-								Path: path.Join(root, diff.Filename),
-								Branches: []PdmDiffBranchStatus{
-									{Name: branch, Status: diff.Status},
-								}}
-						} else {
-							// append branch
-							pdmDiff.Branches = append(pdmDiff.Branches, PdmDiffBranchStatus{Name: branch, Status: diff.Status})
-						}
-						changedEntries[diff.Filename] = pdmDiff
+			if prev_hash == "" {
+				// file doesn't exist in previous commit -> skip to next
+				continue
+			}
+			if prev_hash == current_hash {
+				if i != 0 {
+					// previous hash equal -> the file is a previous version of this branch and must be updated
+					LogVerbose(fmt.Sprintf("There is a newer version of the file in %s\n", branch))
+					changedEntries = append(changedEntries, PdmDiffBranchStatus{Name: branch, Status: 1, Commit: commit})
+					if fast {
+						return changedEntries, nil
 					}
-					//LogVerbose("Complete\n")
+				} else {
+					// file is equal to the common ancestor -> no changes in the branch
+					LogVerbose(fmt.Sprintf("No file changes in %s\n", branch))
 				}
-			} else {
-				LogVerbose("No concurrent edit\n")
+				// go to next branch
+				common_hash = true
+				break
 			}
+		}
+		if !common_hash {
+			LogVerbose(fmt.Sprintf("No common hash found in %s\n", branch))
 		}
 	}
 

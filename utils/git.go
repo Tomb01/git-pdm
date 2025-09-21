@@ -20,6 +20,7 @@ func execGitCommand(args ...string) ([]byte, error) {
 		args = args[1:]
 	}
 
+	//LogVerbose(strings.Join(args, " "))
 	cmd := exec.Command("git", args...)
 	cmd.Dir = GetGitRoot()
 
@@ -69,8 +70,8 @@ func GetHooksPath() string {
 	return hooksAbs
 }
 
-// GitRelFilepath gets the path relative to the git root
-func GitRelFilepath(absPath string) (string, error) {
+// GitRelativeFilepath gets the path relative to the git root
+func GitRelativeFilepath(absPath string) (string, error) {
 	// Get git root
 	gitRoot := GetGitRoot()
 	// Compute relative path
@@ -195,4 +196,33 @@ func GetCommonAncestor(baseBranch string, sourceBranch string) (string, error) {
 		return "", fmt.Errorf("Error in merge-base: %w", err)
 	}
 	return strings.ReplaceAll(string(out), "\n", ""), nil
+}
+
+func GetCommitHystory(start string, end string, file []string) ([]string, error) {
+	args := append([]string{"log", end, start, "--pretty=format:%H", "--"}, file...)
+	out, err := execGitCommand(args...)
+	if err != nil {
+		return nil, fmt.Errorf("Error retriving commit hystory: %w", err)
+	}
+	str := string(out)
+	if str == "" {
+		return []string{}, nil
+	}
+	return strings.Split(string(out), "\n"), nil
+}
+
+func GetFileHash(file string, commit string) (string, error) {
+	out, err := execGitCommand("ls-tree", commit, "--", file)
+	if err != nil {
+		return "", fmt.Errorf("Error retriving commit hystory: %w", err)
+	}
+	str := string(out)
+	if str == "" {
+		return "", nil
+	}
+	fields := strings.Fields(str) // <-- correct usage
+	if len(fields) < 3 {
+		return "", fmt.Errorf("Unexpected hash format: %w", err)
+	}
+	return fields[2], nil
 }

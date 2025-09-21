@@ -14,7 +14,11 @@ var lockCmd = &cobra.Command{
 }
 
 func lock(cmd *cobra.Command, args []string) {
-	relPath := args[0] //relative path of the file
+	filePath := args[0] // path of the file
+	relPath, err := utils.GitRelativeFilepath(filePath)
+	if err != nil {
+		fmt.Println("Error in locking:", err)
+	}
 	// Check if file is locked
 	lock, err := utils.GetLockStatus(relPath)
 	if lock != (utils.Lock{}) {
@@ -26,17 +30,19 @@ func lock(cmd *cobra.Command, args []string) {
 	}
 
 	// File can be unlocked, check if file has changes on another branch
-	changes, err := utils.Diff([]string{relPath}, true)
+	changes, err := utils.FileDiff(relPath, true)
 	if err != nil {
 		fmt.Println("Error in locking:", err)
 		return
 	}
 	if len(changes) > 0 {
 		// file has changes on another branch -> need update with checkout
-		changedBranch := changes[relPath].Branches[0].Name
+		changedBranch := changes[0].Name
 		fmt.Printf("The file was edited in another branch.\nUse the following command to retrive the last version\n\n\tgit checkout %s -- \"%s\"\n\n", changedBranch, relPath)
 		return
 	}
+
+	return
 
 	// Lock file
 	status, lock, err := utils.LockFile(relPath)

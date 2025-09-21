@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/Tomb01/git-pdm/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -18,7 +17,8 @@ var diffCmd = &cobra.Command{
 }
 
 func diff(cmd *cobra.Command, args []string) {
-	var search []string
+	fmt.Println("Command not implemented yet")
+	/*var search []string
 	if len(filePatterns) == 0 {
 		lockable, err := utils.GetLockableFiles()
 		if err != nil {
@@ -31,7 +31,7 @@ func diff(cmd *cobra.Command, args []string) {
 		search = filePatterns
 	}
 
-	diffEntries, err := utils.Diff(search, false)
+	diffEntries, err := utils.FileDiff(search, false)
 	if err != nil {
 		fmt.Println("Error in diff research", err)
 		return
@@ -68,7 +68,7 @@ func diff(cmd *cobra.Command, args []string) {
 		}
 		fmt.Print("\nTo show more information use the --json option")
 		return
-	}
+	}*/
 }
 
 func init() {

@@ -16,7 +16,7 @@ var prePushCmd = &cobra.Command{
 func prePush(cmd *cobra.Command, args []string) {
 	// Pre push command
 	// Unlock all files
-	locks, err := utils.GetOursLocks()
+	locks, err := utils.GetLocks(true)
 	if err != nil {
 		fmt.Println("Error in pre-push routine", err)
 		return
