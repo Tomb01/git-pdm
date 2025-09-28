@@ -40,7 +40,13 @@ func execGitCommand(args ...string) ([]byte, error) {
 		// Command failed but no actual stderr — treat as non-critical
 		return stdout.Bytes(), nil
 	}
+	//LogVerbose(strings.Join(args, " "))
 	return stdout.Bytes(), nil
+}
+
+func Fetch() error {
+	_, err := execGitCommand("git", "fetch", "origin")
+	return err
 }
 
 func GetGitRoot() string {
@@ -116,9 +122,17 @@ func GetCurrentBranch() (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
+func GetCurrentCommit(branch string) (string, error) {
+	out, err := execGitCommand("git", "rev-parse", branch)
+	if err != nil {
+		return "", fmt.Errorf("failed to get current HEAD commit: %w", err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
 // GetRemoteBranches returns all remote branches (e.g., origin/main, origin/dev)
 func GetRemoteBranches() ([]string, error) {
-	out, err := execGitCommand("git", "branch", "-r")
+	out, err := execGitCommand("git", "--no-pager", "branch", "-r")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list remote branches: %w", err)
 	}
@@ -199,7 +213,7 @@ func GetCommonAncestor(baseBranch string, sourceBranch string) (string, error) {
 }
 
 func GetCommitHystory(start string, end string, file []string) ([]string, error) {
-	args := append([]string{"log", end, start, "--pretty=format:%H", "--"}, file...)
+	args := append([]string{"--no-pager", "log", end, start, "--pretty=format:%H", "--"}, file...)
 	out, err := execGitCommand(args...)
 	if err != nil {
 		return nil, fmt.Errorf("Error retriving commit hystory: %w", err)
@@ -208,7 +222,7 @@ func GetCommitHystory(start string, end string, file []string) ([]string, error)
 	if str == "" {
 		return []string{}, nil
 	}
-	return strings.Split(string(out), "\n"), nil
+	return strings.Split(str, "\n"), nil
 }
 
 func GetFileHash(file string, commit string) (string, error) {
@@ -225,4 +239,27 @@ func GetFileHash(file string, commit string) (string, error) {
 		return "", fmt.Errorf("Unexpected hash format: %w", err)
 	}
 	return fields[2], nil
+}
+
+func GetBranchDiff(source string, dest string, filter []string) ([]string, error) {
+	//git diff --name-only main..your-branch | grep -Ei '\.(js|ts|jsx)$'
+	args := []string{"--no-pager", "diff", "--name-only", dest + ".." + source, "--"}
+	args = append(args, filter...)
+	out, err := execGitCommand(args...)
+	if err != nil {
+		return nil, fmt.Errorf("Error retriving diff: %w", err)
+	}
+	str := string(out)
+	LogVerbose(str)
+	if str == "" {
+		return []string{}, nil
+	}
+	lines := strings.Split(str, "\n")
+	var filtered []string
+	for _, s := range lines {
+		if s != "" {
+			filtered = append(filtered, s)
+		}
+	}
+	return filtered, nil
 }

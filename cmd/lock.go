@@ -15,9 +15,9 @@ var lockCmd = &cobra.Command{
 
 func lock(cmd *cobra.Command, args []string) {
 	filePath := args[0] // path of the file
-	relPath, err := utils.GitRelativeFilepath(filePath)
-	if err != nil {
-		fmt.Println("Error in locking:", err)
+	relPath, _ := utils.GitRelativeFilepath(filePath)
+	if relPath == "" {
+		relPath = filePath
 	}
 	// Check if file is locked
 	lock, err := utils.GetLockStatus(relPath)
@@ -30,7 +30,11 @@ func lock(cmd *cobra.Command, args []string) {
 	}
 
 	// File can be unlocked, check if file has changes on another branch
-	changes, err := utils.FileDiff(relPath, true)
+	branches, err := utils.GetRemoteBranches()
+	if err != nil {
+		fmt.Println("Error in retriving remote branches", err)
+	}
+	changes, err := utils.FileDiff(relPath, branches, true)
 	if err != nil {
 		fmt.Println("Error in locking:", err)
 		return
