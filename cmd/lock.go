@@ -46,8 +46,6 @@ func lock(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	return
-
 	// Lock file
 	status, lock, err := utils.LockFile(relPath)
 	if err != nil {

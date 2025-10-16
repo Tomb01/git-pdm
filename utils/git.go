@@ -212,6 +212,15 @@ func GetCommonAncestor(baseBranch string, sourceBranch string) (string, error) {
 	return strings.ReplaceAll(string(out), "\n", ""), nil
 }
 
+// GitCheckoutFile checks out a specific file from a given branch
+func CheckoutFile(branch string, filePath string) error {
+	out, err := execGitCommand("checkout", branch, "--", filePath)
+	if err != nil {
+		return fmt.Errorf("error checking out file '%s' from branch '%s': %w\n%s", filePath, branch, err, string(out))
+	}
+	return nil
+}
+
 func GetCommitHystory(start string, end string, file []string) ([]string, error) {
 	args := append([]string{"--no-pager", "log", end, start, "--pretty=format:%H", "--"}, file...)
 	out, err := execGitCommand(args...)
@@ -245,12 +254,13 @@ func GetBranchDiff(source string, dest string, filter []string) ([]string, error
 	//git diff --name-only main..your-branch | grep -Ei '\.(js|ts|jsx)$'
 	args := []string{"--no-pager", "diff", "--name-only", dest + ".." + source, "--"}
 	args = append(args, filter...)
+	LogVerbose(strings.Join(args, " ") + "\n")
 	out, err := execGitCommand(args...)
 	if err != nil {
 		return nil, fmt.Errorf("Error retriving diff: %w", err)
 	}
 	str := string(out)
-	LogVerbose(str)
+	//LogVerbose(str)
 	if str == "" {
 		return []string{}, nil
 	}

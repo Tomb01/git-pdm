@@ -28,3 +28,24 @@ func LogVerbose(str string) {
 		fmt.Print(str)
 	}
 }
+
+func SplitArgs(args []string) (beforeArgs []string, afterArgs []string) {
+	separatorIndex := -1
+	for i, a := range args {
+		if a == "--" {
+			separatorIndex = i
+			break
+		}
+	}
+
+	if separatorIndex != -1 {
+		beforeArgs = args[:separatorIndex]
+		if separatorIndex+1 < len(args) {
+			afterArgs = args[separatorIndex+1:]
+		}
+	} else {
+		beforeArgs = args
+	}
+
+	return beforeArgs, afterArgs
+}
