@@ -7,46 +7,56 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// prePushCmd represents the "pdm pre-push" command, which runs before a git push
+// to automatically unlock files that were previously locked.
 var prePushCmd = &cobra.Command{
 	Use:   "pre-push",
 	Short: "Pre-push command hooks",
-	Run:   prePush,
+	RunE:  prePush,
 }
 
-func prePush(cmd *cobra.Command, args []string) {
-	// Pre push command
-	// Unlock all files
+// prePush executes the pre-push routine.
+// It unlocks all files that are currently locked and exist in the repository.
+// Returns a non-nil error if any unlock operation fails.
+func prePush(cmd *cobra.Command, args []string) error {
 	locks, err := utils.GetLocks(true)
 	if err != nil {
-		fmt.Println("Error in pre-push routine", err)
-		return
+		return fmt.Errorf("error retrieving locks in pre-push routine: %w", err)
 	}
 
-	if err != nil {
-		fmt.Println("Error in pre-push routine", err)
-		return
-	}
 	if len(locks) == 0 {
-		fmt.Println("No file to unlock")
-		return
+		utils.Println("No files to unlock")
+		return nil
 	}
-	for _, lock := range locks {
-		utils.LogVerbose(fmt.Sprintf("Try unlocking %s . . . ", lock.Path))
+
+	total := len(locks)
+	locked := []utils.Lock{}
+	for i, lock := range locks {
+		counter := fmt.Sprintf("[%d/%d]", i+1, total)
+		utils.Println("\r%s Unlocking %s ... ", counter, lock.Path) // \r returns to the start of the line
+
 		absPath, _ := utils.GetAbsoluteFilePath(lock.Path)
 		if !utils.FileExists(absPath) {
-			utils.LogVerbose("the file doesn't exist anymore. Skipping lock\n")
-		} else {
-			status, _, err := utils.UnLockFile(lock.Path)
-			if err != nil || !status {
-				fmt.Println("Error in unlocking "+lock.Path, err)
-				return
-			} else if utils.Verbose {
-				utils.LogVerbose("Complete\n")
-			}
+			utils.LogVerbose("\r%s File doesn't exist. Skipping.\n", counter)
+			continue
 		}
+
+		status, newlock, err := utils.UnLockFile(lock.Path)
+		locked = append(locked, newlock)
+		if err != nil || !status {
+			fmt.Printf("\n")
+			return fmt.Errorf("error unlocking file %s: %w", lock.Path, err)
+		}
+
+		utils.Println("\r%s Complete\n", counter)
 	}
 
-	fmt.Println("Pre-push routine completed")
+	utils.Println("\nPre-push routine completed")
+	if err := utils.PrintJSON(locked); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func init() {

@@ -1,3 +1,5 @@
+// The 'install' command configures git-pdm on the current repository by
+// setting up necessary Git hooks, LFS, and optional CAD-specific attributes.
 package cmd
 
 import (
@@ -10,64 +12,66 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// software defines the CAD system for which git-pdm should customize
+// installation (e.g., SOLIDWORKS).
 var software string
 
+// installCmd represents the "pdm install" command. It installs git-pdm in the
+// current Git repository by configuring LFS, updating hooks, and writing
+// appropriate .gitignore and .gitattributes files.
 var installCmd = &cobra.Command{
 	Use:   "install",
 	Short: "Install git-pdm on the current git repository",
-	Run:   install,
+	RunE:  install,
 }
 
-func install(cmd *cobra.Command, args []string) {
-	// get hooks path
+// install sets up git-pdm on the active Git repository.
+//
+// Operations performed:
+//  1. Ensures Git LFS is installed and initializes it.
+//  2. Adds a "git-pdm pre-push" command to the Git hooks if not already present.
+//  3. Optionally appends CAD-specific ignore and attribute rules based on the
+//     selected software (e.g., SOLIDWORKS).
+func install(cmd *cobra.Command, args []string) error {
 	hooksCommand := "git-pdm pre-push"
 	hooksPath := utils.GetHooksPath()
 	if hooksPath == "" {
-		fmt.Println("Error in edit pre-push hooks file: Hooks path not found")
-		return
+		return fmt.Errorf("unable to locate Git hooks directory")
 	}
 
-	// STEP 1: Install git lfs
+	// Install Git LFS and verify hook presence
 	writeHook := true
 	tmpCmd := exec.Command("git-lfs", "install")
 	output, err := tmpCmd.CombinedOutput()
 	if err != nil {
 		if strings.Split(string(output), "\n")[0] == "Hook already exists: pre-push" {
-			// Check if git-pdm hooks already exist
-			isInstalled, err := utils.StringExistsInFile(hooksPath+"\\pre-push", hooksCommand)
+			isInstalled, err := utils.StringExistsInFile(hooksPath+"/pre-push", hooksCommand)
 			if err == nil && isInstalled {
 				writeHook = false
 			} else {
-				fmt.Println("There is a custom-made pre-push hook file in this repository: please follow instruction for manual installation of git-pdm")
-				return
+				return fmt.Errorf("a custom pre-push hook exists. Please install git-pdm manually")
 			}
 		} else {
-			fmt.Println("Error:", err)
-			return
+			return fmt.Errorf("git-lfs installation error: %w", err)
 		}
 	} else if string(output) != "Updated git hooks.\nGit LFS initialized.\n" {
-		fmt.Println("Git LFS installation failed:", string(output))
+		return fmt.Errorf("git-lfs installation returned unexpected output: %s", string(output))
 	}
 
-	// STEP 2: edit hooks and add git-pdm pre-push command
-
-	//Write line on pre-push file
+	// Append git-pdm pre-push hook if needed
 	if writeHook {
 		file, err := os.OpenFile(hooksPath+"/pre-push", os.O_APPEND|os.O_WRONLY, 0644)
 		if err != nil {
-			fmt.Println("Error in edit pre-push hooks file:", err)
-			return
+			return fmt.Errorf("error editing pre-push hook: %w", err)
 		}
 		defer file.Close()
 
-		// Write the new line
 		if _, err := file.WriteString(hooksCommand); err != nil {
-			fmt.Println("Error writing to file:", err)
-			return
+			return fmt.Errorf("error writing to pre-push hook: %w", err)
 		}
 	}
 
-	//STEP 3: write .gitattributes based on our CAD system (optional)
+	// Configure CAD-specific attributes and ignores
 	var gitignore, gitattributes string
 	switch software {
 	case "SOLIDWORKS":
@@ -80,29 +84,41 @@ func install(cmd *cobra.Command, args []string) {
 
 	repoRoot := utils.GetGitRoot()
 	if repoRoot != "" {
-		// append to gitigore
 		if gitignore != "" {
-			file, _ := os.OpenFile(repoRoot+"/.gitignore", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			if _, err := file.WriteString(gitignore); err != nil {
-				fmt.Println("Error writing to git ignore:", err)
-				return
+			file, err := os.OpenFile(repoRoot+"/.gitignore", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+				return fmt.Errorf("error opening .gitignore: %w", err)
 			}
 			defer file.Close()
+			if _, err := file.WriteString(gitignore); err != nil {
+				return fmt.Errorf("error writing to .gitignore: %w", err)
+			}
 		}
 		if gitattributes != "" {
-			file, _ := os.OpenFile(repoRoot+"/.gitattributes", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			file, err := os.OpenFile(repoRoot+"/.gitattributes", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+				return fmt.Errorf("error opening .gitattributes: %w", err)
+			}
+			defer file.Close()
 			if _, err := file.WriteString(gitattributes); err != nil {
-				fmt.Println("Error writing to git attributes:", err)
-				return
+				return fmt.Errorf("error writing to .gitattributes: %w", err)
 			}
 		}
 	}
 
-	// Finish
-	fmt.Println("Successfully installed git-pdm on this repository")
+	utils.Println("Successfully installed git-pdm on this repository")
+	return nil
 }
 
+// init registers the "install" command and its flags with the root command.
+// The --software (-s) flag enables CAD-specific setup for supported tools.
 func init() {
-	installCmd.Flags().StringVarP(&software, "software", "s", "", "Custom installation based on specific CAD software\nSOLIDWORS = Dassault System SOLIDWORKS")
+	installCmd.Flags().StringVarP(
+		&software,
+		"software",
+		"s",
+		"",
+		"Custom installation for a specific CAD software (e.g., SOLIDWORKS)",
+	)
 	rootCmd.AddCommand(installCmd)
 }

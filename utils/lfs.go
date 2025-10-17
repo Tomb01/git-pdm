@@ -5,15 +5,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
 
-// Lock represents a single lock in the JSON output of `git lfs locks --json`
+// Owner represents the owner of a Git LFS lock.
 type Owner struct {
 	Name string `json:"name"`
 }
 
+// Lock represents a single Git LFS lock.
 type Lock struct {
 	ID       string    `json:"id"`
 	Path     string    `json:"path"`
@@ -21,39 +23,46 @@ type Lock struct {
 	LockedAt time.Time `json:"locked_at"`
 }
 
+// UnLock represents the result of an unlock operation.
 type UnLock struct {
 	Unlocked bool `json:"unlocked"`
 }
 
-// Root struct for the full JSON
+// LockVerify represents the full JSON output of `git lfs locks --json`,
+// separating locks owned by the current user (Ours) and by others (Theirs).
 type LockVerify struct {
 	Ours   []Lock `json:"ours"`
 	Theirs []Lock `json:"theirs"`
 }
 
+// LockFile locks a file using Git LFS.
+// Returns true if the file was successfully locked, false if it is already locked,
+// the Lock object, and an error if the operation failed.
 func LockFile(file string) (bool, Lock, error) {
 	lockOutputBytes, err := execGitCommand("git", "lfs", "lock", file, "--json")
 	if err != nil {
 		return false, Lock{}, err
 	}
+
 	lockOutput := string(lockOutputBytes)
 	var lock Lock
+
 	if strings.Contains(lockOutput, "Lock exists") {
 		lockData, _ := GetLockStatus(file)
 		return false, lockData, nil
 	} else if strings.Contains(lockOutput, "locked_at") && !strings.Contains(lockOutput, "owner") {
-		if err := json.Unmarshal([]byte(lockOutputBytes), &lock); err != nil {
-			return false, Lock{}, fmt.Errorf("Error reading lfs output: %w", err)
-		} else {
-			return true, lock, nil
+		if err := json.Unmarshal(lockOutputBytes, &lock); err != nil {
+			return false, Lock{}, fmt.Errorf("error reading LFS output: %w", err)
 		}
+		return true, lock, nil
 	} else {
-		return false, Lock{}, fmt.Errorf("General error in locking operations")
+		return false, Lock{}, fmt.Errorf("general error in locking operation")
 	}
 }
 
+// UnLockFile unlocks a file using Git LFS.
+// Returns true if successfully unlocked, the previous Lock (if any), and an error.
 func UnLockFile(relPath string) (bool, Lock, error) {
-	// get lock status
 	lockStatus, err := GetLockStatus(relPath)
 	if err != nil {
 		return false, lockStatus, err
@@ -61,44 +70,46 @@ func UnLockFile(relPath string) (bool, Lock, error) {
 
 	absPath, err := GetAbsoluteFilePath(relPath)
 	if err != nil {
-		return false, Lock{}, fmt.Errorf("Unable to retrive complete file path")
+		return false, Lock{}, fmt.Errorf("unable to retrieve complete file path: %w", err)
 	}
-	// set read only before unlocking
-	err = SetReadOnly(absPath)
-	if err != nil {
-		return false, Lock{}, fmt.Errorf("Error in file unlocking")
+
+	// Set file read-only before unlocking
+	if err := SetReadOnly(absPath); err != nil {
+		return false, Lock{}, fmt.Errorf("error setting file read-only before unlocking: %w", err)
 	}
+
 	unlockOutputBytes, err := execGitCommand("git", "lfs", "unlock", relPath, "--json")
 	if err != nil {
 		return false, Lock{}, err
 	}
+
 	unlockOutput := string(unlockOutputBytes)
 	var unlock UnLock
-	if strings.Contains(unlockOutput, "Lock exists") {
-		// Locked by another user
+
+	switch {
+	case strings.Contains(unlockOutput, "Lock exists"):
 		lockData, _ := GetLockStatus(relPath)
 		return false, lockData, nil
-	} else if strings.Contains(unlockOutput, "unlocked") {
-		// Unlocked procedure completed
-		if err := json.Unmarshal([]byte(unlockOutputBytes), &unlock); err != nil {
-			return false, Lock{}, fmt.Errorf("Error reading lfs output: %w", err)
-		} else {
-			return unlock.Unlocked, Lock{}, nil
+	case strings.Contains(unlockOutput, "unlocked"):
+		if err := json.Unmarshal(unlockOutputBytes, &unlock); err != nil {
+			return false, Lock{}, fmt.Errorf("error reading LFS output: %w", err)
 		}
-	} else if strings.Contains(unlockOutput, "no matching locks found") {
+		return unlock.Unlocked, Lock{}, nil
+	case strings.Contains(unlockOutput, "no matching locks found"):
 		return true, Lock{}, nil
-	} else {
-		return false, Lock{}, fmt.Errorf("General error in unlocking operations")
+	default:
+		return false, Lock{}, fmt.Errorf("general error in unlocking operation")
 	}
 }
 
-// GetLockStatus returns the Git LFS lock ID for a given absolute file path
+// GetLockStatus returns the Git LFS Lock for a given relative path.
+// Returns an error if no lock exists.
 func GetLockStatus(relPath string) (Lock, error) {
-
 	locks, err := GetLocks(false)
 	if err != nil {
 		return Lock{}, fmt.Errorf("failed to run git lfs locks: %w", err)
 	}
+
 	for _, lock := range locks {
 		if lock.Path == relPath {
 			return lock, nil
@@ -108,40 +119,40 @@ func GetLockStatus(relPath string) (Lock, error) {
 	return Lock{}, fmt.Errorf("no lock found for path: %s", relPath)
 }
 
+// GetLocks returns all Git LFS locks.
+// If onlyUser is true, only returns locks owned by the current user.
 func GetLocks(onlyUser bool) ([]Lock, error) {
-	// Run `git lfs locks --json`
 	output, err := execGitCommand("git", "lfs", "locks", "--json", "--verify")
 	if err != nil {
 		return nil, fmt.Errorf("failed to run git lfs locks: %w", err)
 	}
 
 	var locks LockVerify
-	if err := json.Unmarshal([]byte(output), &locks); err != nil {
-		return nil, fmt.Errorf("Error unmarshaling: %w", err)
+	if err := json.Unmarshal(output, &locks); err != nil {
+		return nil, fmt.Errorf("error unmarshaling locks JSON: %w", err)
 	}
+
 	if onlyUser {
 		return locks.Ours, nil
-	} else {
-		return append(locks.Ours, locks.Theirs...), nil
 	}
-
+	return append(locks.Ours, locks.Theirs...), nil
 }
 
+// GetLockableFiles reads the .gitattributes file and returns all file patterns
+// marked as lockable, e.g., "*.sldprt".
 func GetLockableFiles() ([]string, error) {
-	path := GetGitRoot() + "/.gitattributes"
+	path := filepath.Join(GetGitRoot(), ".gitattributes")
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
-	lockableExtensions := make(map[string]struct{}) // Use map to avoid duplicates
+	lockableExtensions := make(map[string]struct{})
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-
-		// Skip empty lines or comments
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
@@ -151,18 +162,10 @@ func GetLockableFiles() ([]string, error) {
 			continue
 		}
 
-		pattern := fields[0]
-		attributes := fields[1:]
-
-		// Check if "lockable" is present in attributes
+		pattern, attributes := fields[0], fields[1:]
 		for _, attr := range attributes {
-			if attr == "lockable" {
-				// Extract the extension from the pattern
-				if strings.HasPrefix(pattern, "*.") {
-					//ext := pattern[2:] // remove "*."
-					lockableExtensions[strings.ToUpper(pattern)] = struct{}{}
-				}
-				break
+			if attr == "lockable" && strings.HasPrefix(pattern, "*.") {
+				lockableExtensions[strings.ToUpper(pattern)] = struct{}{}
 			}
 		}
 	}
@@ -171,7 +174,6 @@ func GetLockableFiles() ([]string, error) {
 		return nil, err
 	}
 
-	// Convert map keys to a slice
 	result := make([]string, 0, len(lockableExtensions))
 	for ext := range lockableExtensions {
 		result = append(result, ext)

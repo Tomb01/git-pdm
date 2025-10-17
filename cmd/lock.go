@@ -1,3 +1,5 @@
+// The 'lock' command enables editing of a specified CAD file by locking it
+// in the PDM system, preventing concurrent modifications by other users.
 package cmd
 
 import (
@@ -7,59 +9,76 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// lockCmd represents the "pdm lock" command. It locks a specified CAD file,
+// granting the current user edit access while ensuring no conflicts exist
+// with other branches or locks.
 var lockCmd = &cobra.Command{
-	Use:   "lock",
-	Short: "Enable the edit of selected file by locking it",
-	Run:   lock,
+	Use:   "lock <file>",
+	Short: "Enable the edit of a selected file by locking it",
+	Args:  cobra.ExactArgs(1),
+	RunE:  lock,
 }
 
-func lock(cmd *cobra.Command, args []string) {
-	filePath := args[0] // path of the file
+// lock executes the logic for the "pdm lock" command.
+//
+// It verifies that the target file is not already locked, checks for
+// unmerged changes on remote branches, and locks the file if safe.
+// Returns a non-nil error if any operation fails.
+func lock(cmd *cobra.Command, args []string) error {
+	filePath := args[0]
 	relPath, _ := utils.GitRelativeFilepath(filePath)
 	if relPath == "" {
 		relPath = filePath
 	}
-	// Check if file is locked
-	lock, err := utils.GetLockStatus(relPath)
-	if lock != (utils.Lock{}) {
-		fmt.Printf("File %s is already locked by %s\n", relPath, lock.Owner.Name)
-		return
-	} else if err != nil && lock != (utils.Lock{}) {
-		fmt.Println("Error in locking:", err)
-		return
+
+	// Check if the file is already locked
+	lockStatus, err := utils.GetLockStatus(relPath)
+	if err != nil {
+		return fmt.Errorf("error while checking lock status: %w", err)
+	}
+	if lockStatus != (utils.Lock{}) {
+		return fmt.Errorf("file %s is already locked by %s", relPath, lockStatus.Owner.Name)
 	}
 
-	// File can be unlocked, check if file has changes on another branch
+	// Verify file has no conflicting changes on remote branches
 	branches, err := utils.GetRemoteBranches()
 	if err != nil {
-		fmt.Println("Error in retriving remote branches", err)
+		return fmt.Errorf("error retrieving remote branches: %w", err)
 	}
+
 	changes, err := utils.FileDiff(relPath, branches, true)
 	if err != nil {
-		fmt.Println("Error in locking:", err)
-		return
+		return fmt.Errorf("error while checking file differences: %w", err)
 	}
 	if len(changes) > 0 {
-		// file has changes on another branch -> need update with checkout
 		changedBranch := changes[0].Name
-		fmt.Printf("The file was edited in another branch.\nUse the following command to retrive the last version\n\n\tgit checkout %s -- \"%s\"\n\n", changedBranch, relPath)
-		return
+		return fmt.Errorf(
+			"the file was edited in another branch.\nUse the following command to retrieve the latest version:\n\n\tgit checkout %s -- \"%s\"",
+			changedBranch,
+			relPath,
+		)
 	}
 
-	// Lock file
-	status, lock, err := utils.LockFile(relPath)
+	// Lock the file for editing
+	status, lockStatus, err := utils.LockFile(relPath)
 	if err != nil {
-		fmt.Println("Error in locking:", err)
-		return
+		return fmt.Errorf("error while locking file: %w", err)
 	}
 	if status {
-		fmt.Printf("Successfully enabled editing for \"%s\"\n", relPath)
+		utils.Println("Successfully enabled editing for \"%s\"", relPath)
 	} else {
-		fmt.Printf("File %s is already locked by %s\n", relPath, lock.Owner.Name)
-		return
+		return fmt.Errorf("file %s is already locked by %s", relPath, lockStatus.Owner.Name)
 	}
+
+	// Output JSON if requested
+	if err := utils.PrintJSON(lockStatus); err != nil {
+		return err
+	}
+
+	return nil
 }
 
+// init registers the "lock" command with the root command.
 func init() {
 	rootCmd.AddCommand(lockCmd)
 }
