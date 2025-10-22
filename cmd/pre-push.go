@@ -10,9 +10,11 @@ import (
 // prePushCmd represents the "pdm pre-push" command, which runs before a git push
 // to automatically unlock files that were previously locked.
 var prePushCmd = &cobra.Command{
-	Use:   "pre-push",
-	Short: "Pre-push command hooks",
-	RunE:  prePush,
+	Use:           "pre-push",
+	Short:         "Pre-push command hooks",
+	RunE:          prePush,
+	SilenceErrors: true,
+	SilenceUsage:  true,
 }
 
 // prePush executes the pre-push routine.
@@ -29,15 +31,14 @@ func prePush(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	total := len(locks)
+	tot := len(locks)
 	locked := []utils.Lock{}
 	for i, lock := range locks {
-		counter := fmt.Sprintf("[%d/%d]", i+1, total)
-		utils.Println("\r%s Unlocking %s ... ", counter, lock.Path) // \r returns to the start of the line
+		utils.PrintCounter(i+1, tot, "Unlocking "+lock.Path)
 
 		absPath, _ := utils.GetAbsoluteFilePath(lock.Path)
 		if !utils.FileExists(absPath) {
-			utils.LogVerbose("\r%s File doesn't exist. Skipping.\n", counter)
+			utils.LogVerbose("\n%s File doesn't exist. Skipping.\n")
 			continue
 		}
 
@@ -47,11 +48,9 @@ func prePush(cmd *cobra.Command, args []string) error {
 			fmt.Printf("\n")
 			return fmt.Errorf("error unlocking file %s: %w", lock.Path, err)
 		}
-
-		utils.Println("\r%s Complete\n", counter)
 	}
 
-	utils.Println("\nPre-push routine completed")
+	utils.Print("\r[%d/%d] Unlock completed!%-100s", tot, tot, "")
 	if err := utils.PrintJSON(locked); err != nil {
 		return err
 	}

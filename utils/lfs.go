@@ -116,7 +116,7 @@ func GetLockStatus(relPath string) (Lock, error) {
 		}
 	}
 
-	return Lock{}, fmt.Errorf("no lock found for path: %s", relPath)
+	return Lock{}, nil
 }
 
 // GetLocks returns all Git LFS locks.

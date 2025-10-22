@@ -37,8 +37,21 @@ func LogVerbose(str string, args ...interface{}) {
 
 // Println prints a formatted message unless JSON output mode is enabled.
 func Println(str string, args ...interface{}) {
+	Print(str+"\n", args...)
+}
+
+func Print(str string, args ...interface{}) {
 	if !OutJson {
-		fmt.Printf(str+"\n", args...)
+		fmt.Printf(str, args...)
+	}
+}
+
+func PrintCounter(i int, tot int, str string) {
+	counter := fmt.Sprintf("[%d/%d] %s", i, tot, str)
+	if Verbose {
+		Println(counter)
+	} else {
+		Print("\r%-100s", counter)
 	}
 }
 

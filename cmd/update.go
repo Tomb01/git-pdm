@@ -7,8 +7,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var filePatterns []string
 var onlyConflict bool
+var dryRun bool
 
 // diffCmd represents the "pdm update" command.
 // It updates changed files from another branch to the current branch,
@@ -39,10 +39,15 @@ func update(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("error getting branch diff: %w", err)
 	}
 
+	if dryRun {
+		utils.Println("!!! Dry mode activated - the file will not be checked out !!!")
+	}
+
 	tot := len(diff)
+	outstr := ""
 	for i, relPath := range diff {
-		counter := fmt.Sprintf("[%d/%d]", i+1, tot)
-		utils.Println(fmt.Sprintf("\r%s Checking for update %s ...", counter, relPath))
+
+		utils.PrintCounter(i+1, tot, "Checking "+relPath)
 
 		changes, err := utils.FileDiff(relPath, []string{branch}, true)
 		if err != nil {
@@ -51,16 +56,26 @@ func update(cmd *cobra.Command, args []string) error {
 		}
 
 		if len(changes) > 0 {
-			if err := utils.CheckoutFile(branch, relPath); err != nil {
-				fmt.Printf("\n")
-				return fmt.Errorf("checkout failed for %s: %w", relPath, err)
+			if !dryRun {
+				if err := utils.CheckoutFile(branch, relPath); err != nil {
+					fmt.Printf("\n")
+					return fmt.Errorf("checkout failed for %s: %w", relPath, err)
+				}
+				utils.LogVerbose("\n%s has changes -> updated\n", relPath)
 			}
-			utils.LogVerbose("\r%s %s has changes -> updated\n", counter, relPath)
+
+			outstr += relPath + "\n"
 		} else if onlyConflict {
-			utils.LogVerbose("\r%s %s has no changes\n", counter, relPath)
+			utils.LogVerbose("\n%s has no changes\n", relPath)
 		}
 	}
-	utils.Println("\nUpdate routine completed\n")
+	utils.Print("\r[%d/%d] Update completed!%-100s", tot, tot, "")
+
+	if outstr != "" {
+		utils.Println("Updated files:\n%s\n", outstr)
+	} else {
+		utils.Println("\nNo file to update")
+	}
 
 	if err := utils.PrintJSON(diff); err != nil {
 		return err
@@ -72,12 +87,10 @@ func update(cmd *cobra.Command, args []string) error {
 //
 // Flags:
 //
-//	--filepath, -f: specify file(s) or patterns to update (supports wildcards).
 //	--json        : output results in JSON format.
-//	--only-conflict, -c: only print files with conflicts.
+//	--dry		  : only run the check without update
 func init() {
-	diffCmd.Flags().StringSliceVarP(&filePatterns, "filepath", "f", []string{}, "Check the difference of a specific file or file type (use * as a wildcard). If empty, checks all locked file types specified in .gitattributes.")
-	diffCmd.Flags().BoolVar(&utils.OutJson, "json", false, "If used, the output will be formatted in JSON")
 	diffCmd.Flags().BoolVarP(&onlyConflict, "only-conflict", "c", false, "Only edit conflicts will be printed")
+	diffCmd.Flags().BoolVar(&dryRun, "dry", false, "only run the check without update")
 	rootCmd.AddCommand(diffCmd)
 }

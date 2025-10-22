@@ -13,10 +13,12 @@ import (
 // granting the current user edit access while ensuring no conflicts exist
 // with other branches or locks.
 var lockCmd = &cobra.Command{
-	Use:   "lock <file>",
-	Short: "Enable the edit of a selected file by locking it",
-	Args:  cobra.ExactArgs(1),
-	RunE:  lock,
+	Use:           "lock <file>",
+	Short:         "Enable the edit of a selected file by locking it",
+	Args:          cobra.ExactArgs(1),
+	RunE:          lock,
+	SilenceUsage:  true,
+	SilenceErrors: true,
 }
 
 // lock executes the logic for the "pdm lock" command.
