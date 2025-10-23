@@ -35,9 +35,9 @@ func FileDiff(relPath string, branches []string, fast bool) ([]PdmDiffBranchStat
 		return nil, err
 	}
 
-	file := []string{relPath}
+	//file := []string{relPath}
 	changedEntries := []PdmDiffBranchStatus{}
-	var previousCommonAncestor string
+	//var previousCommonAncestor string
 
 	for _, branch := range branches {
 		// Skip origin/currentBranch and origin/main
@@ -48,7 +48,7 @@ func FileDiff(relPath string, branches []string, fast bool) ([]PdmDiffBranchStat
 		LogVerbose(fmt.Sprintf("Comparing hash in %s", branch))
 
 		// Get the common ancestor between current branch and target branch
-		commonAncestor, err := GetCommonAncestor(currentBranch, branch)
+		/*commonAncestor, err := GetCommonAncestor(currentBranch, branch)
 		if err != nil {
 			return nil, err
 		}
@@ -67,7 +67,7 @@ func FileDiff(relPath string, branches []string, fast bool) ([]PdmDiffBranchStat
 				})
 			}
 			continue
-		}
+		}*/
 
 		// Get file hash in target branch
 		currentHash, err := GetFileHash(relPath, branch)
@@ -81,7 +81,7 @@ func FileDiff(relPath string, branches []string, fast bool) ([]PdmDiffBranchStat
 				changedEntries = append(changedEntries, PdmDiffBranchStatus{
 					Name:   branch,
 					Status: 2,
-					Commit: commonAncestor,
+					Commit: "",
 					File:   "",
 				})
 			}
@@ -89,7 +89,7 @@ func FileDiff(relPath string, branches []string, fast bool) ([]PdmDiffBranchStat
 		}
 
 		// Get commit history from common ancestor to current branch
-		history, err := GetCommitHistory(commonAncestor, currentBranch, file)
+		history, err := GetLogHistory(branch, relPath)
 		if err != nil {
 			return nil, fmt.Errorf("error retrieving commit history for %s: %w", relPath, err)
 		}
@@ -136,7 +136,7 @@ func FileDiff(relPath string, branches []string, fast bool) ([]PdmDiffBranchStat
 			}
 		}
 
-		previousCommonAncestor = commonAncestor
+		//previousCommonAncestor = commonAncestor
 	}
 
 	return changedEntries, nil

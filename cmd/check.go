@@ -9,12 +9,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var fastMode bool
+
 // checkCmd represents the "pdm check" command. It inspects CAD files for
 // differences between the specified branch (or current one) and "origin/main".
 var checkCmd = &cobra.Command{
 	Use:           "check",
 	Short:         "Check the CAD file status on the branch",
-	Args:          cobra.MinimumNArgs(1),
 	RunE:          check,
 	SilenceUsage:  true,
 	SilenceErrors: true,
@@ -30,16 +31,16 @@ type PdmFileDiff struct {
 // check executes the "pdm check" command logic.
 // Returns a non-nil error on failure, which Cobra uses to set the exit status.
 func check(cmd *cobra.Command, args []string) error {
-	branch := args[0]
-	files := args[1:]
+	filters := args
 
-	diff, err := utils.GetBranchDiff("HEAD", branch, files)
+	//files, err := utils.GetBranchDiff("HEAD", branch, files)
+	files, err := utils.GetFiles(filters)
 	if err != nil {
 		return fmt.Errorf("error getting branch diff: %w", err)
 	}
 
 	out := []PdmFileDiff{}
-	tot := len(diff)
+	tot := len(files)
 	outstr := ""
 
 	branches, err := utils.GetRemoteBranches()
@@ -48,13 +49,16 @@ func check(cmd *cobra.Command, args []string) error {
 	}
 
 	//utils.Println("")
+	if fastMode {
+		utils.Println("!!! Fast mode ON !!!")
+	}
 
-	for i, relPath := range diff {
+	for i, relPath := range files {
 		// Update the counter line using carriage return and padding
 		utils.PrintCounter(i+1, tot, "Checking "+relPath)
 
 		// Process file diff
-		changes, err := utils.FileDiff(relPath, branches, false)
+		changes, err := utils.FileDiff(relPath, branches, fastMode)
 		if err != nil {
 			utils.Println("") // move to a new line before returning
 			return fmt.Errorf("error retrieving file changes (%s): %w", relPath, err)
@@ -80,11 +84,11 @@ func check(cmd *cobra.Command, args []string) error {
 				Changes: changes,
 			}
 			out = append(out, fileStatus)
-			utils.Print("\r[%d/%d] Check completed!%-100s", tot, tot, "")
 		} else {
-			utils.Println("\nNo changes")
+			utils.LogVerbose("\nNo changes")
 		}
 	}
+	utils.Print("\r[%d/%d] Check completed!%-100s", tot, tot, "")
 
 	if outstr != "" {
 		utils.Print("\n\n" + outstr)
@@ -99,5 +103,6 @@ func check(cmd *cobra.Command, args []string) error {
 
 // init initializes the "check" command and registers it with the root command.
 func init() {
+	checkCmd.Flags().BoolVar(&fastMode, "fast", false, "The check stops at the first multiple branch edit")
 	rootCmd.AddCommand(checkCmd)
 }

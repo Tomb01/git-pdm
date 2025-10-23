@@ -253,3 +253,43 @@ func GetBranchDiff(source, dest string, filter []string) ([]string, error) {
 	}
 	return filtered, nil
 }
+
+func GetLogHistory(branch string, file string) ([]string, error) {
+	out, err := execGitCommand("--no-pager", "log", "--format=%H", branch, "--", file)
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving branch log: %w", err)
+	}
+	str := string(out)
+	if str == "" {
+		return []string{}, nil
+	}
+	lines := strings.Split(str, "\n")
+	var filtered []string
+	for _, s := range lines {
+		if s != "" {
+			filtered = append(filtered, s)
+		}
+	}
+	return filtered, nil
+}
+
+func GetFiles(filter []string) ([]string, error) {
+	args := []string{"--no-pager", "ls-files"}
+	args = append(args, filter...)
+	out, err := execGitCommand(args...)
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving files: %w", err)
+	}
+	str := string(out)
+	if str == "" {
+		return []string{}, nil
+	}
+	lines := strings.Split(str, "\n")
+	var filtered []string
+	for _, s := range lines {
+		if s != "" {
+			filtered = append(filtered, s)
+		}
+	}
+	return filtered, nil
+}
