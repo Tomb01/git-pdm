@@ -25,7 +25,9 @@ type Lock struct {
 
 // UnLock represents the result of an unlock operation.
 type UnLock struct {
+	Path string `json:"path"`
 	Unlocked bool `json:"unlocked"`
+	Reason string `json:"reason"`
 }
 
 // LockVerify represents the full JSON output of `git lfs locks --json`,
@@ -51,7 +53,7 @@ func LockFile(file string) (bool, Lock, error) {
 		lockData, _ := GetLockStatus(file)
 		return false, lockData, nil
 	} else if strings.Contains(lockOutput, "locked_at") && !strings.Contains(lockOutput, "owner") {
-		if err := json.Unmarshal(lockOutputBytes, &lock); err != nil {
+		if err := UnmarshalFirst(lockOutputBytes, &lock); err != nil {
 			return false, Lock{}, fmt.Errorf("error reading LFS output: %w", err)
 		}
 		return true, lock, nil
@@ -91,8 +93,8 @@ func UnLockFile(relPath string) (bool, Lock, error) {
 		lockData, _ := GetLockStatus(relPath)
 		return false, lockData, nil
 	case strings.Contains(unlockOutput, "unlocked"):
-		if err := json.Unmarshal(unlockOutputBytes, &unlock); err != nil {
-			return false, Lock{}, fmt.Errorf("error reading LFS output: %w", err)
+		if err := UnmarshalFirst(unlockOutputBytes, &unlock); err != nil {
+			return false, Lock{}, fmt.Errorf("error reading LFS object output: %w", err)
 		}
 		return unlock.Unlocked, Lock{}, nil
 	case strings.Contains(unlockOutput, "no matching locks found"):

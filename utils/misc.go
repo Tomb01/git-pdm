@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -93,4 +94,30 @@ func SplitArgs(args []string) (beforeArgs []string, afterArgs []string) {
 	}
 
 	return beforeArgs, afterArgs
+}
+
+// UnmarshalFirst fills 'v' with either the single object or the first element of an array.
+// 'v' must be a pointer to the target variable.
+func UnmarshalFirst[T any](data []byte, v *T) error {
+	raw := bytes.TrimSpace(data)
+	if len(raw) == 0 {
+		return fmt.Errorf("empty input data")
+	}
+
+	// Case: JSON Array
+	if raw[0] == '[' {
+		var slice []T
+		if err := json.Unmarshal(raw, &slice); err != nil {
+			return err
+		}
+		if len(slice) == 0 {
+			return fmt.Errorf("json array is empty")
+		}
+		// Assign the first element to the pointer
+		*v = slice[0]
+		return nil
+	}
+
+	// Case: Single JSON Object
+	return json.Unmarshal(raw, v)
 }
